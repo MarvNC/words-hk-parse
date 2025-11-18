@@ -28,14 +28,15 @@ jobs:
         with:
           bun-version: latest
 
+      # Ensure npm 11.5.1 or later for trusted publishing
+      # https://github.com/orgs/community/discussions/173102
+      - run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm ci
 
       - name: Run tests
         run: npm test
-
-      - name: Build
-        run: npm run build
 
       - name: Publish to NPM
         run: npm publish
