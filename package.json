@@ -5,7 +5,7 @@
     "type": "git",
     "url": "https://github.com/MarvNC/words-hk-parse"
   },
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Standalone TypeScript library for downloading and parsing Words.hk Cantonese dictionary data",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
