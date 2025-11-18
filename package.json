@@ -1,0 +1,55 @@
+{
+  "name": "words-hk-parse",
+  "version": "1.0.0",
+  "description": "Standalone TypeScript library for downloading and parsing Words.hk Cantonese dictionary data",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "bun test",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cantonese",
+    "dictionary",
+    "words.hk",
+    "jyutping",
+    "parser",
+    "csv"
+  ],
+  "author": "MarvNC",
+  "license": "MIT",
+  "dependencies": {
+    "@gerhobbelt/xregexp": "^4.4.0-32",
+    "axios": "^1.7.9",
+    "csv-parser": "^3.0.0",
+    "jsdom": "^26.0.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.10.2",
+    "bun-types": "^1.1.42",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}
