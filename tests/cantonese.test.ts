@@ -205,7 +205,8 @@ for (const { text, reading, expected, shouldThrow } of testCases) {
       expect(() => parseCantoneseReadings(text, reading)).toThrow();
     } else {
       const result = parseCantoneseReadings(text, reading);
-      expect(result).toEqual(expected);
+      expect(result).toBeDefined();
+      expect(result).toEqual(expected!);
     }
   });
 }
