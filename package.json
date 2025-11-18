@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "test": "bun test",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
@@ -48,7 +48,7 @@
     "eslint": "^9.17.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.4.2",
-    "tsup": "^8.3.5",
+    "tsdown": "^0.16.5",
     "typescript": "^5.7.2"
   },
   "files": [
