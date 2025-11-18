@@ -6,13 +6,13 @@ dist/
 *.tsbuildinfo
 
 # Test data
-test-data/
-csvs/
-*.csv
-*.csv.gz
+# test-data/
+# csvs/
+# *.csv
+# *.csv.gz
 
 # IDE
-.vscode/
+# .vscode/
 .idea/
 *.swp
 *.swo
