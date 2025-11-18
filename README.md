@@ -246,14 +246,3 @@ The dictionary data from Words.hk is licensed under the
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Changelog
-
-### 1.0.0 (Initial Release)
-
-- Download latest Words.hk dictionary data
-- Parse CSV files into structured JSON
-- Parse Cantonese Jyutping readings
-- Full TypeScript support
-- Comprehensive test coverage
-- ESM and CommonJS builds
