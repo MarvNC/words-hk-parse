@@ -190,8 +190,9 @@ TAG_TRANSLATIONS['俚語']; // 'slang'
 TAG_TRANSLATIONS['粗俗']; // 'vulgar'
 
 // Translate tags in dictionary entries
-const entry = await parseCsvFile('./data/all-12345678.csv')[0];
-entry.tags.forEach(tag => {
+const entries = await parseCsvFile('./data/all-12345678.csv');
+const entry = entries[0];
+entry.tags.forEach((tag) => {
   const translation = TAG_TRANSLATIONS[tag.name] || tag.name;
   console.log(`${tag.name} (${translation}): ${tag.value}`);
 });
