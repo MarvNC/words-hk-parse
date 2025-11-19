@@ -162,6 +162,8 @@ Matches Chinese text with Jyutping readings.
 
 ### Constants
 
+#### Language Data
+
 ```typescript
 import { LANGUAGES_DATA } from 'words-hk-parse';
 
@@ -169,6 +171,30 @@ import { LANGUAGES_DATA } from 'words-hk-parse';
 LANGUAGES_DATA.yue; // { name: '廣東話', shortName: '粵', langCode: 'yue' }
 LANGUAGES_DATA.eng; // { name: '英文', shortName: '英', langCode: 'en' }
 // ...
+```
+
+#### Tag Translations
+
+```typescript
+import { TAG_TRANSLATIONS } from 'words-hk-parse';
+
+// Map of Chinese tags to English translations
+// Parts of speech
+TAG_TRANSLATIONS['名詞']; // 'noun'
+TAG_TRANSLATIONS['動詞']; // 'verb'
+TAG_TRANSLATIONS['形容詞']; // 'adjective'
+
+// Labels
+TAG_TRANSLATIONS['香港']; // 'Hong Kong'
+TAG_TRANSLATIONS['俚語']; // 'slang'
+TAG_TRANSLATIONS['粗俗']; // 'vulgar'
+
+// Translate tags in dictionary entries
+const entry = await parseCsvFile('./data/all-12345678.csv')[0];
+entry.tags.forEach(tag => {
+  const translation = TAG_TRANSLATIONS[tag.name] || tag.name;
+  console.log(`${tag.name} (${translation}): ${tag.value}`);
+});
 ```
 
 ## Development
