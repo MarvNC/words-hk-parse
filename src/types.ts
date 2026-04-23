@@ -82,4 +82,5 @@ export interface DictionaryEntry {
   headwords: Headword[];
   tags: Tag[];
   senses: Sense[];
+  variants?: string[];
 }

@@ -1,7 +1,8 @@
 import { test, expect, beforeAll, describe } from 'bun:test';
 import path from 'path';
 import { parseCSVEntries } from '../src/parser/csvReader.js';
-import type { DictionaryEntry } from '../src/types.js';
+import { parseEntry } from '../src/parser/entryParser.js';
+import type { DictionaryEntry, CsvRecord } from '../src/types.js';
 
 const testCsvFile = path.join(__dirname, 'data', 'testdata.csv');
 
@@ -108,6 +109,7 @@ const expectedEntries: DictionaryEntry[] = [
         ],
       },
     ],
+    variants: ['排汙'],
   },
   {
     id: 72252,
@@ -157,6 +159,7 @@ const expectedEntries: DictionaryEntry[] = [
         ],
       },
     ],
+    variants: ['㨂選'],
   },
   {
     id: 66987,
@@ -468,4 +471,30 @@ describe('CSV Entry Parser', () => {
       expect(entry).toEqual(expectedEntry);
     });
   }
+
+  test('parseEntry extracts variants from CSV record', () => {
+    const csvRecord: CsvRecord = {
+      id: '12345',
+      headword: '測試:caak3 si3',
+      entry: '(pos:名詞)\nyue:測試',
+      variants: '唔使,唔洗',
+      warning: 'OK',
+      public: '已公開',
+    };
+    const parsed = parseEntry(csvRecord);
+    expect(parsed.variants).toEqual(['唔使', '唔洗']);
+  });
+
+  test('parseEntry omits variants when CSV field is empty', () => {
+    const csvRecord: CsvRecord = {
+      id: '12346',
+      headword: '測試:caak3 si3',
+      entry: '(pos:名詞)\nyue:測試',
+      variants: '',
+      warning: 'OK',
+      public: '已公開',
+    };
+    const parsed = parseEntry(csvRecord);
+    expect(parsed.variants).toBeUndefined();
+  });
 });

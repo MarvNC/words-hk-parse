@@ -34,6 +34,10 @@ export function parseEntry(entry: CsvRecord): DictionaryEntry {
 
   const headwords = parseHeadwords(entry.headword);
 
+  const variants = entry.variants
+    ? entry.variants.split(',').map(v => v.trim()).filter(Boolean)
+    : undefined;
+
   const entryLines = entry.entry.split('\n');
   const tags = parseTags(entryLines);
 
@@ -54,6 +58,7 @@ export function parseEntry(entry: CsvRecord): DictionaryEntry {
     headwords,
     tags,
     senses,
+    variants,
   };
 }
 
