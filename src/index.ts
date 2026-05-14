@@ -31,7 +31,7 @@ export type {
 } from './types.js';
 
 // Export constants
-export { LANGUAGES_DATA, TAG_TRANSLATIONS } from './constants.js';
+export { LANGUAGES_DATA, LANGUAGES_SET, TAG_TRANSLATIONS } from './constants.js';
 export type { LanguageInfo } from './constants.js';
 
 // Export utility types

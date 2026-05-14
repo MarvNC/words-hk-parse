@@ -86,6 +86,11 @@ export const LANGUAGES_DATA: Record<Language, LanguageInfo> = {
 };
 
 /**
+ * Set of all supported language codes for fast O(1) lookup
+ */
+export const LANGUAGES_SET: Set<string> = new Set(Object.keys(LANGUAGES_DATA));
+
+/**
  * Map of Chinese tag names to English translations
  * Used for parts of speech and labels in dictionary entries
  */
