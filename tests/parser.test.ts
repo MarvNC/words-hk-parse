@@ -1,6 +1,12 @@
 import { test, expect, beforeAll, describe } from 'bun:test';
+import fs from 'fs';
 import path from 'path';
-import { parseCSVEntries } from '../src/parser/csvReader.js';
+import {
+  parseCSVEntries,
+  parseCsvFileStream,
+  readCSVFast,
+  readCSVAsync,
+} from '../src/parser/csvReader.js';
 import { parseEntry } from '../src/parser/entryParser.js';
 import type { DictionaryEntry, CsvRecord } from '../src/types.js';
 
@@ -496,5 +502,47 @@ describe('CSV Entry Parser', () => {
     };
     const parsed = parseEntry(csvRecord);
     expect(parsed.variants).toBeUndefined();
+  });
+});
+
+describe('parseCsvFileStream', () => {
+  test('yields the same entries as parseCSVEntries', async () => {
+    const streamEntries: DictionaryEntry[] = [];
+    for await (const entry of parseCsvFileStream(testCsvFile)) {
+      streamEntries.push(entry);
+    }
+    const arrayEntries = await parseCSVEntries(testCsvFile);
+    expect(streamEntries).toEqual(arrayEntries);
+  });
+
+  test('skips NO DATA entries', async () => {
+    const tempCsv = path.join(__dirname, 'data', 'temp-no-data.csv');
+    const csvContent = [
+      ',,""',
+      '""',
+      '99999,測試:caak3 si3,"未有內容 NO DATA",,OK,已公開',
+      '12345,測試二:caak3 si3 ji6,"(pos:名詞)\nyue:測試二",,OK,已公開',
+    ].join('\n');
+
+    fs.writeFileSync(tempCsv, csvContent);
+
+    try {
+      const entries: DictionaryEntry[] = [];
+      for await (const entry of parseCsvFileStream(tempCsv)) {
+        entries.push(entry);
+      }
+      expect(entries.length).toBe(1);
+      expect(entries[0].id).toBe(12345);
+    } finally {
+      fs.unlinkSync(tempCsv);
+    }
+  });
+});
+
+describe('readCSVFast', () => {
+  test('produces identical output to readCSVAsync on testdata.csv', async () => {
+    const fastRecords = readCSVFast(testCsvFile);
+    const asyncRecords = await readCSVAsync(testCsvFile);
+    expect(fastRecords).toEqual(asyncRecords);
   });
 });

@@ -1,4 +1,4 @@
-import { LANGUAGES_DATA } from '../constants.js';
+import { LANGUAGES_SET } from '../constants.js';
 import type {
   CsvRecord,
   DictionaryEntry,
@@ -19,6 +19,9 @@ export class ParseError extends Error {
   }
 }
 
+// Pre-compiled regex for tag cleanup
+const TAGS_CLEANUP_RE = /[()]/g;
+
 /**
  * Parses a CSV record into a structured DictionaryEntry object
  *
@@ -38,19 +41,35 @@ export function parseEntry(entry: CsvRecord): DictionaryEntry {
     ? entry.variants.split(',').map(v => v.trim()).filter(Boolean)
     : undefined;
 
-  const entryLines = entry.entry.split('\n');
-  const tags = parseTags(entryLines);
+  const entryText = entry.entry;
+  const firstNewline = entryText.indexOf('\n');
 
-  const explanationsText = entryLines.join('\n');
-  const explanationsTexts = explanationsText
-    .split(/^----$/gm)
-    .map((text) => {
-      return text;
-    });
+  let tagLine: string;
+  let rest: string;
+
+  if (firstNewline === -1) {
+    tagLine = entryText;
+    rest = '';
+  } else {
+    tagLine = entryText.slice(0, firstNewline);
+    rest = entryText.slice(firstNewline + 1);
+  }
+
+  const tags = parseTags([tagLine]);
 
   const senses: Sense[] = [];
-  for (const text of explanationsTexts) {
-    senses.push(parseSense(text));
+  let start = 0;
+  while (true) {
+    const sep = rest.indexOf('\n----\n', start);
+    if (sep === -1) {
+      const text = rest.slice(start);
+      if (text || senses.length === 0) {
+        senses.push(parseSense(text));
+      }
+      break;
+    }
+    senses.push(parseSense(rest.slice(start, sep + 1)));
+    start = sep + 6;
   }
 
   return {
@@ -72,7 +91,7 @@ export function parseEntry(entry: CsvRecord): DictionaryEntry {
 export function parseHeadwords(headwordString: string): Headword[] {
   return headwordString.split(',').map((headword) => {
     const [text, ...readings] = headword.split(':');
-    if (!text || !readings) {
+    if (!text || readings.length === 0) {
       throw new ParseError(`Invalid headword: ${headword}`);
     }
     return {
@@ -85,31 +104,35 @@ export function parseHeadwords(headwordString: string): Headword[] {
 /**
  * Parses tags from the first line of entry lines in format (pos:value)(label:value)
  *
- * @param entryLines - The entry lines (will be mutated by removing the first line)
+ * @param entryLines - The entry lines (first line is used for tags)
  * @returns An array of tag objects
  * @throws ParseError if tags cannot be parsed
  */
 export function parseTags(entryLines: string[]): Tag[] {
-  if (!entryLines[0].startsWith('(pos:')) {
-    throw new ParseError(
-      `Entry does not start with (pos:): ${entryLines[0]}`
-    );
-  }
-  // tags in format (pos:名詞)(label:書面語)
-  const firstLine = entryLines.shift();
+  const firstLine = entryLines[0];
   if (!firstLine) {
     throw new ParseError(`Entry is empty: ${entryLines.toString()}`);
   }
-  const tags = firstLine.split(')(').map((tag) => {
-    tag = tag.replace(/[()]/g, '');
-    let colonIndex = tag.indexOf(':');
+  if (!firstLine.startsWith('(pos:')) {
+    throw new ParseError(
+      `Entry does not start with (pos:): ${firstLine}`
+    );
+  }
+  // tags in format (pos:名詞)(label:書面語)
+  const tags: Tag[] = [];
+  const parts = firstLine.split(')(');
+
+  for (let i = 0; i < parts.length; i++) {
+    const tag = parts[i].replace(TAGS_CLEANUP_RE, '');
+    const colonIndex = tag.indexOf(':');
+    if (colonIndex === -1) {
+      continue;
+    }
     const name = tag.slice(0, colonIndex).trim();
     const value = tag.slice(colonIndex + 1).trim();
-    return {
-      name,
-      value,
-    };
-  });
+    tags.push({ name, value });
+  }
+
   if (tags.length === 0) {
     throw new ParseError(`No tags found: ${firstLine}`);
   }
@@ -123,16 +146,35 @@ export function parseTags(entryLines: string[]): Tag[] {
  * @returns A parsed sense object
  */
 export function parseSense(entryText: string): Sense {
-  // Remove first line explanations
-  entryText = entryText.replace('<explanation>\n', '');
-  const [explanationText, ...examplesTexts] = entryText.split(/^<eg>$/gm);
-
-  const explanation = parseLanguageData(explanationText);
+  let pos = 0;
+  if (entryText.startsWith('<explanation>\n')) {
+    pos = '<explanation>\n'.length;
+  }
 
   const egs: LanguageData[] = [];
-  for (const exampleText of examplesTexts) {
-    egs.push(parseLanguageData(exampleText));
+
+  // Find first <eg> on its own line
+  let egPos = entryText.indexOf('\n<eg>\n', pos);
+  let explanationText: string;
+
+  if (egPos === -1) {
+    explanationText = entryText.slice(pos);
+  } else {
+    explanationText = entryText.slice(pos, egPos + 1);
+    pos = egPos + 6;
+
+    while (true) {
+      const nextEgPos = entryText.indexOf('\n<eg>\n', pos);
+      if (nextEgPos === -1) {
+        egs.push(parseLanguageData(entryText.slice(pos)));
+        break;
+      }
+      egs.push(parseLanguageData(entryText.slice(pos, nextEgPos + 1)));
+      pos = nextEgPos + 6;
+    }
   }
+
+  const explanation = parseLanguageData(explanationText);
 
   return { explanation, egs };
 }
@@ -147,49 +189,52 @@ export function parseSense(entryText: string): Sense {
  */
 export function parseLanguageData(text: string): LanguageData {
   const languageData: LanguageData = {};
-  const lines = text.split('\n');
 
   let currentLang: Language | '' = '';
   let currentLangData = '';
 
-  /**
-   * Adds the currently stored language data to the languageData object
-   */
-  function addCurrentLangData() {
-    if (!currentLang) {
-      return;
+  let start = 0;
+  while (start <= text.length) {
+    // Find next newline
+    let end = text.indexOf('\n', start);
+    if (end === -1) end = text.length;
+
+    const line = text.slice(start, end);
+    start = end + 1;
+
+    // Find colon using direct character scanning
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) {
+      // If no colon is found, this is a continuation of the previous line
+      currentLangData += '\n' + line.trim();
+      continue;
     }
-    if (!currentLangData) {
-      return;
+
+    const matchedLang = line.slice(0, colonIndex);
+    // Use Set for O(1) language validation
+    if (!LANGUAGES_SET.has(matchedLang)) {
+      throw new ParseError(`Invalid language: ${matchedLang}`);
     }
+
+    // Save previous language data if any
+    if (currentLang && currentLangData) {
+      if (!languageData[currentLang]) {
+        languageData[currentLang] = [];
+      }
+      languageData[currentLang]!.push(currentLangData.trim());
+    }
+
+    currentLang = matchedLang as Language;
+    currentLangData = line.slice(colonIndex + 1).trim();
+  }
+
+  // Save final language data
+  if (currentLang && currentLangData) {
     if (!languageData[currentLang]) {
       languageData[currentLang] = [];
     }
     languageData[currentLang]!.push(currentLangData.trim());
-    currentLang = '';
-    currentLangData = '';
   }
 
-  for (const line of lines) {
-    // Check if first few characters are a language followed by :
-    const matchedLang = line.split(':')[0];
-    if (
-      // !(matchedLang.length >= 2 && matchedLang.length <= 4) ||
-      !line.includes(':')
-    ) {
-      // If no language is found, this is a continuation of the previous line
-      currentLangData += '\n' + line.trim();
-      continue;
-    }
-    // Check if the language is a possible language
-    if (!LANGUAGES_DATA[matchedLang as Language]) {
-      throw new ParseError(`Invalid language: ${matchedLang}`);
-    }
-    // Else a language is found
-    addCurrentLangData();
-    currentLang = matchedLang as Language;
-    currentLangData = line.replace(`${currentLang}:`, '').trim();
-  }
-  addCurrentLangData();
   return languageData;
 }

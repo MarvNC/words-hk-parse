@@ -1,38 +1,133 @@
 import fs from 'fs';
-import csv from 'csv-parser';
 import path from 'path';
+import csv from 'csv-parser';
 import { parseEntry } from './entryParser.js';
 import type { CsvRecord, DictionaryEntry } from '../types.js';
 
-const csvHeaders = ['id', 'headword', 'entry', 'variants', 'warning', 'public'];
+/**
+ * Fast custom CSV parser for words.hk format.
+ * Reads the whole file and parses it with minimal overhead.
+ *
+ * @param csvPath - Path to the CSV file
+ * @returns Array of CSV records
+ */
+export function readCSVFast(csvPath: string): CsvRecord[] {
+  let content = fs.readFileSync(csvPath, 'utf-8');
+
+  // Strip BOM if present
+  if (content.charCodeAt(0) === 0xfeff) {
+    content = content.slice(1);
+  }
+
+  const records: CsvRecord[] = [];
+  let currentField = '';
+  let currentFields: string[] = [];
+  let inQuotes = false;
+  let linesSkipped = 0;
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    const nextChar = content[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') {
+        i++;
+      }
+      currentFields.push(currentField);
+      currentField = '';
+
+      if (linesSkipped < 2) {
+        linesSkipped++;
+        currentFields = [];
+        continue;
+      }
+
+      if (currentFields.length !== 6) {
+        throw new Error(
+          `Invalid CSV: expected 6 columns, got ${currentFields.length} at record ${records.length + 1}`
+        );
+      }
+
+      const [id, headword, entry, variants, warning, publicField] = currentFields;
+      records.push({
+        id,
+        headword,
+        entry,
+        variants,
+        warning,
+        public: publicField,
+      });
+      currentFields = [];
+    } else if (char === ',' && !inQuotes) {
+      currentFields.push(currentField);
+      currentField = '';
+    } else {
+      currentField += char;
+    }
+  }
+
+  // Handle last record if file doesn't end with newline
+  if (currentField !== '' || currentFields.length > 0) {
+    currentFields.push(currentField);
+    if (linesSkipped >= 2) {
+      if (currentFields.length !== 6) {
+        throw new Error(
+          `Invalid CSV: expected 6 columns, got ${currentFields.length} at record ${records.length + 1}`
+        );
+      }
+      const [id, headword, entry, variants, warning, publicField] = currentFields;
+      records.push({
+        id,
+        headword,
+        entry,
+        variants,
+        warning,
+        public: publicField,
+      });
+    }
+  }
+
+  return records;
+}
 
 /**
- * Reads a CSV file and returns the parsed records
+ * Reads a CSV file asynchronously using csv-parser (C++ optimized).
+ * This is faster than the custom JS parser for large files.
  *
  * @param csvPath - Path to the CSV file
  * @returns Promise resolving to an array of CSV records
  */
-async function readCSVAsync(csvPath: string): Promise<CsvRecord[]> {
+export function readCSVAsync(csvPath: string): Promise<CsvRecord[]> {
   return new Promise((resolve, reject) => {
-    const results: CsvRecord[] = [];
-    fs.createReadStream(csvPath)
-      .pipe(
-        csv({
-          headers: csvHeaders,
-          strict: true,
-          skipLines: 2,
-          quote: '"',
-        })
-      )
-      .on('data', (data: CsvRecord) => {
-        results.push(data);
+    const records: CsvRecord[] = [];
+
+    const stream = fs.createReadStream(csvPath).pipe(
+      csv({
+        skipLines: 2,
+        headers: ['id', 'headword', 'entry', 'variants', 'warning', 'public'],
       })
-      .on('end', () => {
-        resolve(results);
-      })
-      .on('error', (error) => {
-        reject(error);
+    );
+
+    stream.on('data', (data) => {
+      records.push({
+        id: data.id,
+        headword: data.headword,
+        entry: data.entry,
+        variants: data.variants,
+        warning: data.warning,
+        public: data.public,
       });
+    });
+
+    stream.on('end', () => resolve(records));
+    stream.on('error', reject);
   });
 }
 
@@ -85,22 +180,23 @@ export interface ParseStats {
 }
 
 /**
- * Parses CSV entries into structured dictionary entries
+ * Parses a CSV file and yields dictionary entries one at a time.
+ * Uses csv-parser for fast CSV reading, then the optimized parseEntry for entry parsing.
  *
- * @param csvPath - Path to the CSV file to parse
- * @returns Promise resolving to an array of dictionary entries
+ * @param filePath - Path to the CSV file
+ * @yields Parsed dictionary entries
  */
-export async function parseCSVEntries(
-  csvPath: string
-): Promise<DictionaryEntry[]> {
-  const data = await readCSVAsync(csvPath);
-  console.log(`Read ${data.length} entries from ${csvPath}`);
+export async function* parseCsvFileStream(
+  filePath: string
+): AsyncGenerator<DictionaryEntry> {
+  const data = await readCSVAsync(filePath);
+  console.log(`Read ${data.length} entries from ${filePath}`);
 
-  const dictionaryEntries: DictionaryEntry[] = [];
   let unpublishedCount = 0;
   let noDataCount = 0;
   let unreviewedCount = 0;
   let errorCount = 0;
+  let parsedCount = 0;
 
   for (const entry of data) {
     if (entry.entry === '未有內容 NO DATA') {
@@ -119,7 +215,8 @@ export async function parseCSVEntries(
     }
     try {
       const parsedEntry = parseEntry(entry);
-      dictionaryEntries.push(parsedEntry);
+      parsedCount++;
+      yield parsedEntry;
     } catch (error) {
       errorCount++;
       const errorMessage =
@@ -127,12 +224,28 @@ export async function parseCSVEntries(
       console.log(`Error parsing entry ${entry.id}: ${errorMessage}`);
     }
   }
-  console.log(`Parsed ${dictionaryEntries.length} entries`);
+
+  console.log(`Parsed ${parsedCount} entries`);
   console.log(`Skipped ${noDataCount} no data entries`);
   if (errorCount > 0) {
     console.log(`Encountered ${errorCount} parsing errors`);
   }
-  return dictionaryEntries;
+}
+
+/**
+ * Parses CSV entries into structured dictionary entries
+ *
+ * @param csvPath - Path to the CSV file to parse
+ * @returns Promise resolving to an array of dictionary entries
+ */
+export async function parseCSVEntries(
+  csvPath: string
+): Promise<DictionaryEntry[]> {
+  const entries: DictionaryEntry[] = [];
+  for await (const entry of parseCsvFileStream(csvPath)) {
+    entries.push(entry);
+  }
+  return entries;
 }
 
 /**

@@ -40,3 +40,5 @@ tmp/
 temp/
 
 .claude
+# Benchmark data
+benchmark/data/
